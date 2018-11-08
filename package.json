@@ -7,8 +7,11 @@
     "test": "jest"
   },
   "dependencies": {
+    "brew": "^0.0.8",
+    "global": "^4.3.2",
     "react": "16.6.0-alpha.8af6728",
-    "react-native": "0.57.4"
+    "react-native": "0.57.4",
+    "react-native-android-wifi": "^0.0.34"
   },
   "devDependencies": {
     "babel-jest": "23.6.0",

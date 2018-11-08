@@ -1,350 +1,316 @@
-/**
- * Sample React Native App
- * https://github.com/facebook/react-native
- *
- * @format
- * @flow
- */
+import React, { Component } from 'react';
+import {
+  Modal,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableHighlight,
+  ScrollView,
+  View,
+  PermissionsAndroid
+} from 'react-native';
 
-import React, { Component } from 'react'
-import { StyleSheet, Alert, Text, View, Slider, TouchableOpacity, Switch, ActivityIndicator, ScrollView, Platform } from 'react-native'
+import wifi from 'react-native-android-wifi';
 
-import SystemSetting from 'react-native-system-setting'
+type Props = {};
+export default class App extends Component<Props> {
+  constructor(props){
+    super(props);
+    this.state = {
+      isWifiNetworkEnabled: null,
+      ssid: null,
+      pass: null,
+      ssidExist: null,
+      currentSSID: null,
+      currentBSSID: null, 
+      wifiList: null,
+      modalVisible: false,
+      status:null,
+      level: null,
+      ip: null,
+    };
 
-export default class SystemSettingExample extends Component {
+  }
 
-    isAndroid = Platform.OS === 'android'
+  componentDidMount (){
+    console.log(wifi);
+    this.askForUserPermissions();
+  }
 
-    volumeListener = null
-    wifiListener = null
-    bluetoothListener = null
-    locationListener = null
-    airplaneListener = null
-
-    volTypes = ['music', 'system', 'call', 'ring', 'alarm', 'notification']
-    volIndex = 0
-
-    constructor(props) {
-        super(props)
-        this.state = {
-            volume: 0,
-            volType: this.volTypes[this.volIndex],
-            brightness: 0,
-            wifiEnable: false,
-            wifiStateLoading: false,
-            locationEnable: false,
-            locationStateLoading: false,
-            bluetoothEnable: false,
-            bluetoothStateLoading: false,
-            airplaneEnable: false,
-            airplaneStateLoading: false,
+  async askForUserPermissions() {
+    try {
+      const granted = await PermissionsAndroid.request(
+        PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION,
+        {
+          'title': 'Wifi networks',
+          'message': 'We need your permission in order to find wifi networks'
         }
+      )
+      if (granted === PermissionsAndroid.RESULTS.GRANTED) {
+        console.log("Thank you for your permission! :)");
+      } else {
+        console.log("You will not able to retrieve wifi available networks list");
+      }
+    } catch (err) {
+      console.warn(err)
     }
+  }
 
-    async componentDidMount() {
+  serviceCheckOnPress(){
+    wifi.isEnabled(
+      (isEnabled)=>{
+        this.setState({isWifiNetworkEnabled: isEnabled});
+        console.log(isEnabled);
+      });
+  }
+
+  serviceSetEnableOnPress(enabled){
+    wifi.setEnabled(enabled)
+  }
+
+  connectOnPress(){
+    wifi.findAndConnect(this.state.ssid, this.state.pass, (found) => {
+      this.setState({ssidExist:found});
+    });
+  }
+
+  disconnectOnPress(){
+    wifi.disconnect();
+  }
+
+  getSSIDOnPress(){
+    wifi.getSSID((ssid) => {
+      this.setState({currentSSID:ssid});
+    });
+  }
+
+  getBSSIDOnPress(){
+    wifi.getBSSID((bssid) => {
+      this.setState({currentBSSID:bssid});
+    });
+  }
+
+  getWifiNetworksOnPress(){
+    wifi.loadWifiList((wifiStringList) => {
+        console.log(wifiStringList);
+        var wifiArray = JSON.parse(wifiStringList);
         this.setState({
-            volume: await SystemSetting.getVolume(this.state.volType),
-            brightness: await SystemSetting.getBrightness(),
-            wifiEnable: await SystemSetting.isWifiEnabled(),
-            locationEnable: await SystemSetting.isLocationEnabled(),
-            bluetoothEnable: await SystemSetting.isBluetoothEnabled(),
-            airplaneEnable: await SystemSetting.isAirplaneEnabled(),
-        })
-        // just init slider value directly
-        this._changeSliderNativeVol(this.sliderVol, this.state.volume)
-        this._changeSliderNativeVol(this.sliderBri, this.state.brightness)
+          wifiList:wifiArray,
+          modalVisible: true
+        });
+      },
+      (error) => {
+        console.log(error);
+      }
+    );
+  }
 
-        this.volumeListener = SystemSetting.addVolumeListener((data) => {
-            const volume = this.isAndroid ? data[this.state.volType] : data.value
-            this._changeSliderNativeVol(this.sliderVol, volume)
-            this.setState({
-                volume: volume
-            })
-        })
+  connectionStatusOnPress(){
+    wifi.connectionStatus((isConnected) => {
+      this.setState({status:isConnected});
+    });
+  }
 
-        this.wifiListener = await SystemSetting.addWifiListener((enable) => {
-            this.setState({ wifiEnable: enable })
-        })
+  levelOnPress(){
+    wifi.getCurrentSignalStrength((level)=>{
+      this.setState({level:level});
+    });
+  }
 
-        this.bluetoothListener = await SystemSetting.addBluetoothListener((enable) => {
-            this.setState({ bluetoothEnable: enable })
-        })
+  ipOnPress(){
+    wifi.getIP((ip)=>{
+      this.setState({ip:ip});
+    });
+  }
 
-        this.locationListener = await SystemSetting.addLocationListener((enable) => {
-            this.setState({ locationEnable: enable })
-        })
 
-        this.airplaneListener = await SystemSetting.addAirplaneListener((enable) => {
-            this.setState({ airplaneEnable: enable })
-        })
-    }
-
-    _changeSliderNativeVol(slider, value) {
-        slider.setNativeProps({
-            value: value
-        })
-    }
-
-    componentWillUnmount() {
-        SystemSetting.removeListener(this.volumeListener)
-        SystemSetting.removeListener(this.wifiListener)
-        SystemSetting.removeListener(this.bluetoothListener)
-        SystemSetting.removeListener(this.locationListener)
-        SystemSetting.removeListener(this.airplaneListener)
-    }
-
-    _changeVol(value) {
-        SystemSetting.setVolume(value, {
-            type: this.state.volType,
-            playSound: false,
-            showUI: false
-        })
-        this.setState({
-            volume: value
-        })
-    }
-
-    _changeVolType = async () => {
-        this.volIndex = ++this.volIndex % this.volTypes.length
-        const volType = this.volTypes[this.volIndex]
-        const vol = await SystemSetting.getVolume(volType)
-        this._changeSliderNativeVol(this.sliderVol, vol)
-        this.setState({
-            volType: volType,
-            volume: vol
-        })
-    }
-
-    _changeBrightness = async (value) => {
-        const result = await SystemSetting.setBrightnessForce(value)
-        if (!result) {
-            Alert.alert('Permission Deny', 'You have no permission changing settings', [
-                { 'text': 'Ok', style: 'cancel' },
-                { 'text': 'Open Setting', onPress: () => SystemSetting.grantWriteSettingPremission() }
-            ])
-            return
-        }
-        this.setState({
-            brightness: value,
-        })
-    }
-
-    _restoreBrightness() {
-        const saveBrightnessVal = SystemSetting.restoreBrightness()
-        if (saveBrightnessVal > -1) {
-            // success
-            this.setState({
-                brightness: saveBrightnessVal
-            })
-            this._changeSliderNativeVol(this.sliderBri, saveBrightnessVal)
-        }
-    }
-
-    _switchWifi() {
-        this.setState({
-            wifiStateLoading: true
-        })
-        SystemSetting.switchWifi(async () => {
-            this.setState({
-                wifiEnable: await SystemSetting.isWifiEnabled(),
-                wifiStateLoading: false
-            })
-        })
-    }
-
-    _switchLocation() {
-        this.setState({
-            locationStateLoading: true
-        })
-        SystemSetting.switchLocation(async () => {
-            this.setState({
-                locationEnable: await SystemSetting.isLocationEnabled(),
-                locationStateLoading: false
-            })
-        })
-    }
-
-    _switchBluetooth() {
-        this.setState({
-            bluetoothStateLoading: true
-        })
-        SystemSetting.switchBluetooth(async () => {
-            this.setState({
-                bluetoothEnable: await SystemSetting.isBluetoothEnabled(),
-                bluetoothStateLoading: false
-            })
-        })
-    }
-
-    _switchAirplane() {
-        this.setState({
-            airplaneStateLoading: true
-        })
-        SystemSetting.switchAirplane(async () => {
-            this.setState({
-                airplaneEnable: await SystemSetting.isAirplaneEnabled(),
-                airplaneStateLoading: false
-            })
-        })
-    }
-
-    render() {
-        const { volume, brightness,
-            wifiEnable, wifiStateLoading,
-            locationEnable, locationStateLoading,
-            bluetoothEnable, bluetoothStateLoading,
-            airplaneEnable, airplaneStateLoading,
-        } = this.state
-        return (
-            <ScrollView style={styles.container}>
-                <View style={styles.head}>
-                </View>
-                <ValueView
-                    title='Volume'
-                    btn={this.isAndroid && {
-                        title: this.state.volType,
-                        onPress: this._changeVolType
-                    }}
-                    value={volume}
-                    changeVal={(val) => this._changeVol(val)}
-                    refFunc={(sliderVol) => this.sliderVol = sliderVol}
-                />
-                <ValueView
-                    title='Brightness'
-                    value={brightness}
-                    changeVal={(val) => this._changeBrightness(val)}
-                    refFunc={(sliderBri) => this.sliderBri = sliderBri}
-                />
-                <View style={styles.card}>
-                    <View style={styles.row}>
-                        <Text style={styles.title}>Brightness save & restore
-                        </Text>
-                    </View>
-                    <View style={styles.row}>
-                        <TouchableOpacity style={{ marginRight: 32 }} onPress={SystemSetting.saveBrightness}>
-                            <Text style={styles.btn}>Save
-                            </Text>
-                        </TouchableOpacity>
-                        <TouchableOpacity onPress={this._restoreBrightness.bind(this)}>
-                            <Text style={styles.btn}>Restore
-                            </Text>
-                        </TouchableOpacity>
-                    </View>
-                </View>
-                <StatusView
-                    title='Wifi'
-                    value={wifiEnable}
-                    loading={wifiStateLoading}
-                    switchFunc={(value) => this._switchWifi()} />
-                <StatusView
-                    title='Location'
-                    value={locationEnable}
-                    loading={locationStateLoading}
-                    switchFunc={(value) => this._switchLocation()} />
-                <StatusView
-                    title='Bluetooth'
-                    value={bluetoothEnable}
-                    loading={bluetoothStateLoading}
-                    switchFunc={(value) => this._switchBluetooth()} />
-                <StatusView
-                    title='Airplane'
-                    value={airplaneEnable}
-                    loading={airplaneStateLoading}
-                    switchFunc={(value) => this._switchAirplane()} />
-            </ScrollView>
-        )
-    }
-}
-
-const ValueView = (props) => {
-    const { title, value, changeVal, refFunc, btn } = props
-    return (
-        <View style={styles.card}>
-            <View style={styles.row}>
-                <Text style={styles.title}>{title}</Text>
-                {btn && <TouchableOpacity onPress={btn.onPress}>
-                    <Text style={styles.btn}>{btn.title}
-                    </Text>
-                </TouchableOpacity>}
-                <Text style={styles.value}>{value}</Text>
-            </View>
-            <Slider
-                ref={refFunc}
-                style={styles.slider}
-                onValueChange={changeVal} />
+  renderModal(){
+    var wifiListComponents = [];
+    for (w in this.state.wifiList){
+      wifiListComponents.push(
+        <View key={w} style={styles.instructionsContainer}>
+          <Text style={styles.instructionsTitle}>{this.state.wifiList[w].SSID}</Text>
+          <Text>BSSID: {this.state.wifiList[w].BSSID}</Text>
+          <Text>Capabilities: {this.state.wifiList[w].capabilities}</Text>
+          <Text>Frequency: {this.state.wifiList[w].frequency}</Text>
+          <Text>Level: {this.state.wifiList[w].level}</Text>
+          <Text>Timestamp: {this.state.wifiList[w].timestamp}</Text>
         </View>
-    )
-}
+      );
+    }
+    return wifiListComponents;
+  }
 
-const StatusView = (props) => {
-    const { title, switchFunc, value, loading } = props
+  render() {
     return (
-        <View style={styles.card}>
-            <View style={styles.row}>
-                <Text style={styles.title}>{title}
-                </Text>
-            </View>
-            <View style={styles.row}>
-                <Text>Current status is {loading ? 'switching' : (value ? 'On' : 'Off')}
-                </Text>
-                {
-                    loading && <ActivityIndicator animating={loading} />
-                }
-                <View style={{ flex: 1, alignItems: 'flex-end' }}>
-                    <Switch
-                        onValueChange={switchFunc}
-                        value={value} />
-                </View>
-            </View>
+    <ScrollView>
+      <View style={styles.container}>
+        <Text style={styles.title}>React Native Android Wifi Example Appp</Text>
+        <View style={styles.instructionsContainer}>
+          <Text style={styles.instructionsTitle}>Check wifi service status</Text>
+          <View style={styles.row}>
+            <TouchableHighlight style={styles.button} onPress={this.serviceCheckOnPress.bind(this)}>
+              <Text style={styles.buttonText}>Check</Text>
+            </TouchableHighlight>
+            <Text style={styles.answer}>{this.state.isWifiNetworkEnabled==null?"":this.state.isWifiNetworkEnabled?"Wifi service enabled :)":"Wifi service disabled :("}</Text>
+          </View>
         </View>
-    )
+        <View style={styles.instructionsContainer}>
+          <Text style={styles.instructionsTitle}>Enable/Disable wifi network</Text>
+          <View style={styles.row}>
+            <TouchableHighlight style={styles.button} onPress={this.serviceSetEnableOnPress.bind(this,true)}>
+              <Text style={styles.buttonText}>Enable</Text>
+            </TouchableHighlight>
+            <TouchableHighlight style={styles.button} onPress={this.serviceSetEnableOnPress.bind(this,false)}>
+              <Text style={styles.buttonText}>Disable</Text>
+            </TouchableHighlight>
+          </View>
+        </View>
+        <View style={styles.instructionsContainer}>
+          <Text style={styles.instructionsTitle}>Sign device into a specific network:</Text>
+          <Text style={styles.instructions}>SSID</Text>
+          <TextInput 
+            style={styles.textInput}
+            underlineColorAndroid='transparent'
+            onChangeText={(event)=>this.state.ssid=event}
+            value={this.state.ssid}
+            placeholder={'ssid'} />
+          <Text style={styles.instructions}>Password</Text>
+          <TextInput
+            style={styles.textInput}
+            secureTextEntry={true} 
+            underlineColorAndroid='transparent'
+            onChangeText={(event)=>this.state.pass=event}
+            value={this.state.pass}
+            placeholder={'password'} />
+          <View style={styles.row}>
+            <TouchableHighlight style={styles.button} onPress={this.connectOnPress.bind(this)}>
+              <Text style={styles.buttonText}>Connect</Text>
+            </TouchableHighlight>
+            <Text style={styles.answer}>{this.state.ssidExist==null?"":this.state.ssidExist?"Network in range :)":"Network out of range :("}</Text>
+          </View>
+        </View>
+        <View style={styles.instructionsContainer}>
+          <Text style={styles.instructionsTitle}>Disconnect current wifi network</Text>
+          <View style={styles.row}>
+            <TouchableHighlight style={styles.button} onPress={this.disconnectOnPress.bind(this)}>
+              <Text style={styles.buttonText}>Disconnect</Text>
+            </TouchableHighlight>
+          </View>
+        </View>
+        <View style={styles.instructionsContainer}>
+          <Text style={styles.instructionsTitle}>Current SSID</Text>
+          <View style={styles.row}>
+            <TouchableHighlight style={styles.button} onPress={this.getSSIDOnPress.bind(this)}>
+              <Text style={styles.buttonText}>Get SSID</Text>
+            </TouchableHighlight>
+            <Text style={styles.answer}>{this.state.currentSSID + ""}</Text>
+          </View>
+        </View>
+        <View style={styles.instructionsContainer}>
+          <Text style={styles.instructionsTitle}>Current BSSID</Text>
+          <View style={styles.row}>
+            <TouchableHighlight style={styles.button} onPress={this.getBSSIDOnPress.bind(this)}>
+              <Text style={styles.buttonText}>Get BSSID</Text>
+            </TouchableHighlight>
+            <Text style={styles.answer}>{this.state.currentBSSID + ""}</Text>
+          </View>
+        </View>
+        <View style={styles.instructionsContainer}>
+          <Text style={styles.instructionsTitle}>Get all wifi networks in range</Text>
+          <TouchableHighlight style={styles.bigButton} onPress={this.getWifiNetworksOnPress.bind(this)}>
+            <Text style={styles.buttonText}>Available WIFI Networks</Text>
+          </TouchableHighlight>
+        </View>
+        <View style={styles.instructionsContainer}>
+          <Text style={styles.instructionsTitle}>Connection status</Text>
+          <View style={styles.row}>
+            <TouchableHighlight style={styles.bigButton} onPress={this.connectionStatusOnPress.bind(this)}>
+              <Text style={styles.buttonText}>Get connection status</Text>
+            </TouchableHighlight>
+            <Text style={styles.answer}>{this.state.status==null?"":this.state.status?"You're connected :)":"You're not connected :("}</Text>
+          </View>
+        </View>
+        <View style={styles.instructionsContainer}>
+          <Text style={styles.instructionsTitle}>Get current wifi signal strength</Text>
+          <View style={styles.row}>
+            <TouchableHighlight style={styles.bigButton} onPress={this.levelOnPress.bind(this)}>
+              <Text style={styles.buttonText}>Get signal strength</Text>
+            </TouchableHighlight>
+            <Text style={styles.answer}>{this.state.level==null?"":this.state.level}</Text>
+          </View>
+        </View>
+        <View style={styles.instructionsContainer}>
+          <Text style={styles.instructionsTitle}>Get current IP</Text>
+          <View style={styles.row}>
+            <TouchableHighlight style={styles.button} onPress={this.ipOnPress.bind(this)}>
+              <Text style={styles.buttonText}>Get IP</Text>
+            </TouchableHighlight>
+            <Text style={styles.answer}>{this.state.ip==null?"":this.state.ip}</Text>
+          </View>
+        </View>
+      </View>
+      <Modal 
+        visible={this.state.modalVisible}
+        onRequestClose={() => {}}>
+        <TouchableHighlight style={styles.button} onPress={()=>this.setState({modalVisible:false})}>
+          <Text style={styles.buttonText}>Close</Text>
+        </TouchableHighlight>
+        <ScrollView>
+        {this.renderModal()}
+        </ScrollView>
+      </Modal>
+    </ScrollView>
+    );
+  }
 }
 
 const styles = StyleSheet.create({
-    container: {
-        flex: 1,
-        backgroundColor: '#E5E7E8'
-    },
-    head: {
-        justifyContent: 'center',
-        alignItems: 'center',
-        height: 64,
-    },
-    headline: {
-        fontSize: 22,
-        color: '#666'
-    },
-    card: {
-        padding: 8,
-        backgroundColor: '#fff',
-        marginTop: 4,
-        marginBottom: 4,
-    },
-    row: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        paddingTop: 8,
-        paddingBottom: 8,
-    },
-    title: {
-        fontSize: 16,
-        color: '#6F6F6F'
-    },
-    value: {
-        fontSize: 14,
-        flex: 1,
-        textAlign: 'right',
-        color: '#904ED9'
-    },
-    split: {
-        marginVertical: 16,
-        height: 1,
-        backgroundColor: '#ccc',
-    },
-    btn: {
-        fontSize: 16,
-        padding: 8,
-        paddingVertical: 8,
-        color: '#405EFF'
-    }
-})
+  container: {
+    flex: 1,
+    padding:15,
+    backgroundColor: '#F5FCff',
+    marginBottom:100
+  },
+  row:{
+    flexDirection:'row'
+  },
+  title: {
+    fontSize: 20,
+  },
+  instructionsContainer: {
+    padding:15,
+    borderBottomWidth: 1,
+    borderBottomColor: '#CCCCCC',
+  },
+  instructionsTitle: {
+    marginBottom:10,
+    color: '#333333'
+  },
+  instructions: {
+    color: '#3333ff'
+  },
+  button:{
+    padding:5,
+    width:120,
+    alignItems: 'center',
+    backgroundColor:'blue',
+    marginRight: 15,
+  },
+  bigButton:{
+    padding:5,
+    width:180,
+    alignItems: 'center',
+    backgroundColor:'blue',
+    marginRight: 15,
+  },
+  buttonText:{
+    color:'white'
+  },
+
+  answer:{
+    marginTop: 5,
+  }
+});
+
+
